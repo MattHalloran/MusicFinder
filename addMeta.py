@@ -187,7 +187,6 @@ with open(INPUT_PATH) as f:
         youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
         ydl_opts = {
             'format': 'bestaudio/best',
-            'verbose': 'True',
             'nocheckcertificate': 'True',
             'outtmpl': f'{fileName}.%(ext)s',
             'postprocessors': [{

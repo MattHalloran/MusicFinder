@@ -9,7 +9,6 @@ import asyncio
 import functools
 import logging
 import os
-from sacad import hash
 from sacad import sources
 from sacad.cover import CoverSourceResult, HAS_JPEGOPTIM, HAS_OPTIPNG, SUPPORTED_IMG_FORMATS
 
@@ -45,7 +44,7 @@ async def search_and_download(album, artist, format, size, out_filepath, *, size
     results.extend(source_results)
 
   # Remove bad results (currently just album covers that aren't square)
-  results = await CoverSourceResult.preProcessForComparison(results, size, size_tolerance_prct)
+  results = await CoverSourceResult.preProcessForComparison(results)
   # Sort results
   results.sort(reverse=True,
                key=functools.cmp_to_key(functools.partial(CoverSourceResult.compare,
@@ -70,9 +69,6 @@ async def search_and_download(album, artist, format, size, out_filepath, *, size
     except Exception as e:
       logging.getLogger('Main').warning(f'Download of {result} failed: {e.__class__.__qualname__} {e}')
       
-  #for t in temp:
-  #  t.get_image().save(os.path.expanduser(f'~/Music/Albums/{t.get_image_hash()}.{t.get_image().format}'))
-
   # If there is a duplicate cover, pick the highest quality version of that as the final cover. Otherwise, pick the first
   if num_downloaded > 0:
     best_hash = max(set(hashes), key = hashes.count)

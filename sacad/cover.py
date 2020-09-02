@@ -17,10 +17,10 @@ import bitarray
 import PIL.Image
 import PIL.ImageFile
 import PIL.ImageFilter
+import numpy as np
 import web_cache
 
 from sacad import mkstemp_ctx
-from sacad import hash
 from enum import Enum
 
 class CoverImageFormat(Enum):
@@ -78,8 +78,7 @@ class CoverSourceResult:
     assert((format is None) or (format in CoverImageFormat))
     self.format = format
     self.thumbnail_url = thumbnail_url
-    self.thumbnail_sig = None
-    self.image_hash = None #Shouldn't need this, but it does. Need to find out why this is sometimes not set
+    self.image_hash = None
     self.source = source
     assert(source_quality in CoverSourceQuality)
     self.source_quality = source_quality
@@ -157,7 +156,7 @@ class CoverSourceResult:
       image_data = await __class__.crunch(image_data, target_format)
 
     self.image_data = PIL.Image.open(io.BytesIO(image_data))
-    self.image_hash = hash.calculate_hash(self.image_data)
+    self.image_hash = self.average_hash(self.image_data)
   
   def get_image(self):
     return self.image_data
@@ -326,44 +325,6 @@ class CoverSourceResult:
     """ Set size image metadata to what has been reliably identified. """
     self.size = size
     self.check_metadata = CoverImageMetadata.SIZE
-
-  async def updateSignature(self):
-    """ Calculate a cover's "signature" using its thumbnail url. """
-    assert(self.thumbnail_sig is None)
-
-    if self.thumbnail_url is None:
-      logging.getLogger('Cover').warning("No thumbnail available for %s" % (self))
-      return
-
-    # download
-    logging.getLogger('Cover').debug("Downloading cover thumbnail '%s'..." % (self.thumbnail_url))
-    headers = {}
-    self.source.updateHttpHeaders(headers)
-
-    async def pre_cache_callback(img_data):
-      return await __class__.crunch(img_data, CoverImageFormat.JPEG, silent=True)
-
-    try:
-      store_in_cache_callback, image_data = await self.source.http.query(self.thumbnail_url,
-                                                                         cache=__class__.image_cache,
-                                                                         headers=headers,
-                                                                         pre_cache_callback=pre_cache_callback)
-    except Exception as e:
-      logging.getLogger('Cover').warning("Download of '%s' failed: %s %s" % (self.thumbnail_url,
-                                                                             e.__class__.__qualname__,
-                                                                             e))
-      return
-
-    # compute sig
-    logging.getLogger('Cover').debug("Computing signature of %s..." % (self))
-    try:
-      self.thumbnail_sig = __class__.computeImgSignature(image_data)
-    except Exception as e:
-      logging.getLogger('Cover').warning("Failed to compute signature of '%s': %s %s" % (self,
-                                                                                         e.__class__.__qualname__,
-                                                                                         e))
-    else:
-      await store_in_cache_callback()
 
   @staticmethod
   def compare(first, second, *, target_size, size_tolerance_prct):
@@ -548,59 +509,53 @@ class CoverSourceResult:
         pass
 
   @staticmethod
-  async def preProcessForComparison(results, target_size, size_tolerance_prct):
+  async def preProcessForComparison(results):
     """ Process results to prepare them for future comparison and sorting. """
 
     #Remove non-square images
     results = [r for r in results if r.size[0] == r.size[1]]
 
-    # calculate sigs
-    futures = []
-    for result in results:
-      coroutine = result.updateSignature()
-      future = asyncio.ensure_future(coroutine)
-      futures.append(future)
-    if futures:
-      await asyncio.wait(futures)
-    for future in futures:
-      future.result()  # raise pending exception if any
-
     return results
 
   @staticmethod
-  def computeImgSignature(image_data):
-    """
-    Calculate an image signature.
+  def average_hash(image:PIL.Image, hash_size=8, mean=np.mean):
+    """ Average hash implementation 
+    Returns a string bit representation"""
+    if hash_size < 2:
+      raise ValueError("Hash size must be greater than or equal to 2")
 
-    This is similar to ahash but uses 3 colors components
-    See: https://github.com/JohannesBuchner/imagehash/blob/4.0/imagehash/__init__.py#L125
+    # reduce size and complexity, then covert to grayscale
+    image = image.convert("L").resize((hash_size, hash_size), PIL.Image.ANTIALIAS)
 
-    """
-    parser = PIL.ImageFile.Parser()
-    parser.feed(image_data)
-    img = parser.close()
-    target_size = (__class__.IMG_SIG_SIZE, __class__.IMG_SIG_SIZE)
-    img.thumbnail(target_size, PIL.Image.BICUBIC)
-    if img.size != target_size:
-      logging.getLogger('Cover').debug(f'Non square thumbnail after resize to {target_size}x{target_size}, unable to compute signature')
-      return None
-    img = img.convert(mode='RGB')
-    pixels = img.getdata()
-    pixel_count = target_size[0] * target_size[1]
-    color_count = 3
-    r = bitarray.bitarray(pixel_count * color_count)
-    r.setall(False)
-    for ic in range(color_count):
-      mean = sum(p[ic] for p in pixels) // pixel_count
-      for ip, p in enumerate(pixels):
-        if p[ic] > mean:
-          r[pixel_count * ic + ip] = True
-    return r
+    # find average pixel value; 'pixels' is an array of the pixel values, ranging from 0 (black) to 255 (white)
+    pixels = np.asarray(image)
+    avg = mean(pixels)
 
-  @staticmethod
-  def areImageSigsSimilar(sig1, sig2):
-    """ Compare 2 image "signatures" and return True if they seem to come from a similar image, False otherwise. """
-    return bitarray.bitdiff(sig1, sig2) < 100
+    # create string of bits
+    diff = pixels > avg
+    diff_as_string = ''.join(['1' if x else '0' for x in diff.flatten().tolist()])
+    print(diff_as_string)
+    return diff_as_string
+
+
+  # @staticmethod
+  # def calculate_hash(image:PIL.Image, hashSize:int = 8):
+  #   """Calculates a 2*hashSize*hashSize bit hash of a PIL image"""
+  #   image_data = image.convert('L').resize((hashSize+1, hashSize+1)).getdata()
+  #   width = hashSize+1
+  #   row_hash = 0
+  #   col_hash = 0
+  #   for y in range(hashSize):
+  #       for x in range(hashSize):
+  #           offset = y * width + x
+  #           row_bit = image_data[offset] < image_data[offset + 1]
+  #           row_hash = row_hash << 1 | row_bit
+
+  #           col_bit = image_data[offset] < image_data[offset + width]
+  #           col_hash = col_hash << 1 | col_bit
+
+  #   print(f'{row_hash}{col_hash}')
+  #   return f'{row_hash}{col_hash}'
 
 
 # silence third party module loggers
