@@ -15,8 +15,8 @@ import searchYoutube as syt
 #youtube-dl imports (downloads song from url)
 import youtube_dl
 #used to add metadata to songs that's not already added by youtube-dl (album cover, album, lyrics)
+import mutagen
 from mutagen.easyid3 import EasyID3
-from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC, TPE2, error
 import findAlbumArt
 #other imports
@@ -86,10 +86,15 @@ def formatTitle(title:str):
 def updateMetadata():
     global fileName
 
-    tag = ID3()
-    tag['artist'] = artist
-    tag['title'] = title
-    tag.save(fileName)
+    meta = None
+    try:
+        meta = EasyID3(f'{fileName}.mp3')
+    except mutagen.id3.ID3NoHeaderError:
+        meta = mutagen.File(fileName, easy=True)
+        meta.add_tags()
+    meta['artist'] = artist
+    meta['title'] = title
+    meta.save()
 
     #Searches Genius for the correct song url Uses authentication token, which can be made at https://genius.com/api-clients
     def request_song_url(song_title, artist_name):
@@ -128,7 +133,7 @@ def updateMetadata():
         album_index = album_info_unfiltered.find('Album')
         if album_index != -1:
             album_name = str.strip(album_info_unfiltered[album_index+5:])
-    tag['album'] = album_name
+    meta['album'] = album_name
 
     album_art_downloaded = False
     album_art_path = f'{ALBUM_COVER_DIRECTORY}/{slugify(artist)} - {slugify(album_name)}.png'
@@ -152,30 +157,17 @@ def updateMetadata():
 
     if album_art_downloaded:
         with open(album_art_path, 'rb') as albumart:
-            metadata['APIC'] = APIC(
+            meta['APIC'] = APIC(
                             encoding=3,
                             mime='image/png',
                             type=3, desc=u'Cover',
                             data=albumart.read()
                             )  
 
-    tag['TPE2'] = TPE2(text=artist)
+    meta['TPE2'] = TPE2(text=artist)
 
-    tag.save(fileName)
+    meta.save(fileName)
 
-    #rename file while you have the old artist info (and thus the file name)
-    #Files are organized in the format: ARTIST/ALBUM/SONG.mp3
-    newFileName = f'{SONG_DIRECTORY}/{slugify(artist)}/{slugify(album)}/{slugify(title)}.{ext}'
-
-    if not os.path.exists(os.path.dirname(newFilename)):
-        try:
-            os.makedirs(os.path.dirname(newFilename))
-        except OSError as exc: # Guard against race condition
-            if exc.errno != errno.EEXIST:
-                raise
-
-    os.rename(fileName, newFileName)
-    fileName = newFileName
 
 with open(INPUT_PATH) as f:
     lines = f.readlines()
@@ -183,12 +175,13 @@ with open(INPUT_PATH) as f:
     for search in searchParams:
         artist = str.strip(search[0])
         title = str.strip(formatTitle(search[1]))
-        fileName = f'{SONG_DIRECTORY}/{slugify(artist)} - {slugify(title)}.mp3'
+        fileName = f'{SONG_DIRECTORY}/{slugify(artist)} - {slugify(title)}'
         youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
         ydl_opts = {
             'format': 'bestaudio/best',
+            'verbose': 'True',
             'nocheckcertificate': 'True',
-            'outtmpl': fileName,
+            'outtmpl': f'{fileName}.%(ext)s',
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
