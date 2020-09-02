@@ -82,10 +82,13 @@ def formatTitle(title:str):
 
 
         
-
+#Attempts to add the following ID3 tags to the mp3 file:
+# 1) artist - known
+# 2) title - known
+# 3) lyrics - parses from Genius
+# 4) album name - parses from Genius
+# 5) album art - uses findAlbumArt.py
 def updateMetadata():
-    global fileName
-
     meta = None
     try:
         meta = EasyID3(f'{fileName}.mp3')
@@ -93,8 +96,9 @@ def updateMetadata():
         meta = mutagen.File(fileName, easy=True)
         meta.add_tags()
     meta['artist'] = artist
+    meta['albumartist'] = artist
     meta['title'] = title
-    meta.save()
+
 
     #Searches Genius for the correct song url Uses authentication token, which can be made at https://genius.com/api-clients
     def request_song_url(song_title, artist_name):
@@ -127,12 +131,15 @@ def updateMetadata():
         page = requests.get(song_url)
         soup = BeautifulSoup(page.text, 'html.parser')
 
-        tag['lyrics'] = (str.strip(soup.find('div', class_='lyrics').text))
+        meta['lyricist'] = (str.strip(soup.find('div', class_='lyrics').text))
 
-        album_info_unfiltered = soup.find('div', class_='header_with_cover_art-primary_info').text
-        album_index = album_info_unfiltered.find('Album')
+        #This album art is too small to use in the metadata, but 
+        #we can use its hash when searching for a larger one
+        album_art = soup.find('img', class_='cover_art-image')
+        album_info_div = soup.find('div', class_='header_with_cover_art-primary_info').text
+        album_index = album_info_div.find('Album')
         if album_index != -1:
-            album_name = str.strip(album_info_unfiltered[album_index+5:])
+            album_name = str.strip(album_info_div[album_index+5:])
     meta['album'] = album_name
 
     album_art_downloaded = False
@@ -155,6 +162,9 @@ def updateMetadata():
             del response
             album_art_downloaded = True
 
+    meta.save()
+    meta = ID3(f'{fileName}.mp3')
+
     if album_art_downloaded:
         with open(album_art_path, 'rb') as albumart:
             meta['APIC'] = APIC(
@@ -164,9 +174,7 @@ def updateMetadata():
                             data=albumart.read()
                             )  
 
-    meta['TPE2'] = TPE2(text=artist)
-
-    meta.save(fileName)
+    meta.save()
 
 
 with open(INPUT_PATH) as f:

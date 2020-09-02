@@ -6,7 +6,6 @@ DIRECTORIES_PATH = 'directories.txt'
 
 #Used for accessing various services
 GENIUS_KEY = ''
-YOUTUBE_KEY = ''
 
 #Used for organizing data
 INPUT_PATH = ''
@@ -20,8 +19,6 @@ with open(KEYS_PATH) as f:
     for line in lines:
         if 'GENIUS_KEY' in line:
             GENIUS_KEY = str.strip(line[len('GENIUS_KEY')+1:])
-        elif 'YOUTUBE_KEY' in line:
-            YOUTUBE_KEY = str.strip(line[len('YOUTUBE_KEY')+1:])
 
 #Find inputs/outputs
 with open(DIRECTORIES_PATH) as f:

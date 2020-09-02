@@ -8,7 +8,6 @@
 import json
 import numpy as np
 import re, htmlentitydefs
-from globals import YOUTUBE_KEY
 from utils import removeTitleJunk, excludes_list2
 
 from youtube_search import YoutubeSearch
@@ -16,34 +15,7 @@ from youtube_search import YoutubeSearch
 Prefer_Explicit = True
 WRONG_VIDEO_WORDS = ['karaoke', 'not official', 'montage', 'remix', 'snippet', '8d audio', 'reaction', 'review', 'choreography', 'fast', 'reverb'] #If these words appear in the title or publisher name, don't use these videos
 
-##
-# Removes HTML or XML character references and entities from a text string.
-# Taken from http://effbot.org/zone/re-sub.htm#unescape-html
-# @param text The HTML (or XML) source text.
-# @return The plain text, as a Unicode string, if necessary.
-def unescape(text):
-    def fixup(m):
-        text = m.group(0)
-        if text[:2] == "&#":
-            # character reference
-            try:
-                if text[:3] == "&#x":
-                    return chr(int(text[3:-1], 16))
-                else:
-                    return chr(int(text[2:-1]))
-            except ValueError:
-                pass
-        else:
-            # named entity
-            try:
-                text = chr(htmlentitydefs.name2codepoint[text[1:-1]])
-            except KeyError:
-                pass
-        return text # leave as is
-    return re.sub('&#?\w+;', fixup, text)
-
-#Converts ISO-8601 string to seconds for easy comparisons
-#Ex: PT4M13S -> 4min, 13sec -> 253sec
+#Converts time string to seconds for easy comparisons
 def time_to_seconds(time:str):
     return sum(x * int(t) for x, t in zip([1, 60, 3600], reversed(time.split(":"))))
 
