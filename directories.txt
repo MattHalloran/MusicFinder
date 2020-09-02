@@ -1,0 +1,11 @@
+#Path name for file that contains song titles. Must be in the format: {artist} - {title} to download correctly
+INPUT_PATH: ~/Documents/Python/MusicFinder/TestPlaylist.txt
+
+#Where the songs will be downloaded to. Songs will be organized in the format: ARTIST/ALBUM/SONG
+SONG_DIRECTORY: ~/Music/TestLibrary
+
+#Where to store the album covers
+ALBUM_COVER_DIRECTORY: ~/Music/Albums
+
+#Where logs will go. Check these to find any songs that failed to download
+LOG_DIRECTORY: ~/Music
