@@ -63,8 +63,6 @@ def youtube_search(artist:str, title:str):
 
     json_result = YoutubeSearch(f'{artist} {title} audio', max_results=10).to_json()
 
-    print(json_result)
-
     #Filter out results that:
     # 1) contain the filter words in either the title or channel name
     # 2) don't have the artist name in either the channel name or title

@@ -14,22 +14,17 @@ import re
 import searchYoutube as syt
 #youtube-dl imports (downloads song from url)
 import youtube_dl
-from youtube_dl.postprocessor.ffmpeg import FFmpegMetadataPP
-#Converts webm to mp3
-from pydub import AudioSegment #https://github.com/jiaaro/pydub/
 #used to add metadata to songs that's not already added by youtube-dl (album cover, album, lyrics)
 from mutagen.easyid3 import EasyID3
+from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC, TPE2, error
 import findAlbumArt
 #other imports
 import sys
 import os
-import subprocess
 from os import listdir, path
 from os.path import isfile, join
 sys.path.append(os.path.join(os.path.dirname(__file__), 'PyLyricsLocal'))
-
-import eyed3
 
 #Used to grab data from Genius. See https://dev.to/willamesoares/how-to-integrate-spotify-and-genius-api-to-easily-crawl-song-lyrics-with-python-4o62 and https://stackoverflow.com/questions/13137817/how-to-download-image-using-requests
 import requests
@@ -45,17 +40,6 @@ fileName = ''
 ext = ''
 artist = ''
 title = ''
-
-#START YOUTUBE-DL CODE
-class MyLogger(object):
-    def debug(self, msg):
-        pass
-
-    def warning(self, msg):
-        pass
-
-    def error(self, msg):
-        print(msg) #TODO: Write to log file eventually
 
 #Not perfect, but hopefully gets the job done
 def formatTitle(title:str):
@@ -73,7 +57,7 @@ def formatTitle(title:str):
         if title[openParenPos-1] != ' ':
             title = title.replace('(', ' (')
 
-        #Change all variations of feat. to feat.
+        #Change all variations of featuring to feat.
         old_paren_text = title[openParenPos+1:closeParenPos]
         new_paren_text = str.strip(old_paren_text)
         if len(new_paren_text) > 0:
@@ -96,39 +80,16 @@ def formatTitle(title:str):
     return title
 
 
-#Post-processor for youtube-dl. This is the only way to see all of the information youtube-dl sees
-class YdlPostProcessor(FFmpegMetadataPP):
 
-    def __init__(self, downloader=None, metadata=None):
-        self.metadata = metadata or {}
-        super(YdlPostProcessor, self).__init__(downloader)
-
-    def run(self, information):
-        global fileName, ext, artist, title
-        #Save original info for file rename
-        self.originalArtist = information['artist']
-        self.originalTrack = information['track']
-
-        self.information = information
-
-        result = super(YdlPostProcessor, self).run(information)
-        
-        fileName = self.getOriginalFileName()
-        ext = self.information['ext']
-
-        return result
-
-    def getOriginalFileName(self):
-        return self.information['filepath']
         
 
 def updateMetadata():
     global fileName
 
-    metadata = eyed3.load(fileName)
-    
-    metadata.tag.artist = artist
-    metadata.tag.title = title
+    tag = ID3()
+    tag['artist'] = artist
+    tag['title'] = title
+    tag.save(fileName)
 
     #Searches Genius for the correct song url Uses authentication token, which can be made at https://genius.com/api-clients
     def request_song_url(song_title, artist_name):
@@ -161,17 +122,13 @@ def updateMetadata():
         page = requests.get(song_url)
         soup = BeautifulSoup(page.text, 'html.parser')
 
-        metadata.tag.lyrics.set(str.strip(soup.find('div', class_='lyrics').text))
+        tag['lyrics'] = (str.strip(soup.find('div', class_='lyrics').text))
 
         album_info_unfiltered = soup.find('div', class_='header_with_cover_art-primary_info').text
         album_index = album_info_unfiltered.find('Album')
         if album_index != -1:
             album_name = str.strip(album_info_unfiltered[album_index+5:])
-    metadata.tag.album = album_name
-
-    metadata.tag.save()
-
-    metadata = ID3(fileName)
+    tag['album'] = album_name
 
     album_art_downloaded = False
     album_art_path = f'{ALBUM_COVER_DIRECTORY}/{slugify(artist)} - {slugify(album_name)}.png'
@@ -202,9 +159,9 @@ def updateMetadata():
                             data=albumart.read()
                             )  
 
-    metadata['TPE2'] = TPE2(text=artist)
+    tag['TPE2'] = TPE2(text=artist)
 
-    metadata.save()
+    tag.save(fileName)
 
     #rename file while you have the old artist info (and thus the file name)
     #Files are organized in the format: ARTIST/ALBUM/SONG.mp3
@@ -220,54 +177,32 @@ def updateMetadata():
     os.rename(fileName, newFileName)
     fileName = newFileName
 
-
-
-
-def console_hook(d):
-    if d['status'] == 'finished': #Hit before post-processor and conversion to mp3, so no updating of metadata can be done in here
-        print('Done downloading, now converting ...')
-
-    if d['status'] == 'downloading':
-        if d.get('eta') is not None:
-            print(d['_percent_str'])
-        else:
-            print('Unknown ETA')
-
-metadata = {}
-ydl_opts = {
-    'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }],
-    'outtmpl': f'{SONG_DIRECTORY}/%(artist)s - %(track)s.%(ext)s',
-    'logger': MyLogger(),
-    'progress_hooks': [console_hook],
-    'ignoreerrors': True
-}
-
 with open(INPUT_PATH) as f:
     lines = f.readlines()
     searchParams = [l.split(' - ') for l in lines]
     for search in searchParams:
         artist = str.strip(search[0])
         title = str.strip(formatTitle(search[1]))
+        fileName = f'{SONG_DIRECTORY}/{slugify(artist)} - {slugify(title)}.mp3'
         youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'nocheckcertificate': 'True',
+            'outtmpl': fileName,
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+                }],
+        }
         if youtube_url is None:
             continue
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl_pp = YdlPostProcessor(ydl, metadata)
-            ydl.add_post_processor(ydl_pp)
-            try:
-                #ydl.download([youtube_url])
-                subprocess.run(["youtube-dl", 
-                    "--no-check-certificate", 
-                    "-o", "~/Downloads/test.mp3", 
-                    "-x", "--audio-format", "mp3", youtube_url])
+        try:
+            with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([youtube_url])
                 updateMetadata()
-            except Exception as e:
-                print(e)
+        except Exception as e:
+            print(e)
 
 
 print('done')
