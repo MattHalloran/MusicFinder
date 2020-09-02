@@ -3,20 +3,19 @@
 #Version: 20200109
 #TODO: 1) For every video, WRONG_VIDEO_WORDS gets another 'clean' appended
 #      2) Some things probably don't need to get redone for every song (ex: the youtube build function)
+#YoutubeSearch from https://github.com/joetats/youtube_search
 
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+import json
 import numpy as np
 import re, htmlentitydefs
 import isodate
 from globals import YOUTUBE_KEY
 from utils import removeTitleJunk, excludes_list2
 
+from youtube_search import YoutubeSearch
+
 Prefer_Explicit = True
 WRONG_VIDEO_WORDS = ['karaoke', 'not official', 'montage', 'remix', 'snippet', '8d audio', 'reaction', 'review', 'choreography', 'fast', 'reverb'] #If these words appear in the title or publisher name, don't use these videos
-
-YOUTUBE_API_SERVICE_NAME = 'youtube'
-YOUTUBE_API_VERSION = 'v3'
 
 ##
 # Removes HTML or XML character references and entities from a text string.
@@ -60,49 +59,35 @@ def youtube_search(artist:str, title:str):
     if Prefer_Explicit and 'clean' not in (artist + title).lower():
         WRONG_VIDEO_WORDS.append('clean')
 
-    #Make sure songs and artists that contain words that usually indicate a bad video
-    #don't exclude the bad words they contain (weird wording but I hope it makes sense)
+    #If the song or artist contains a filter word, don't use that filter word 
+    #for this search
     WRONG_VIDEO_WORDS = [word for word in WRONG_VIDEO_WORDS if word not in (artist + title).lower()]
 
-    youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
-                    developerKey=YOUTUBE_KEY)
+    json_result = YoutubeSearch(f'{artist} {title} audio', max_results=10).to_json()
 
-    #Searches youtube for "[ARTIST] [TRACK] lyrics" and gets every video ID
-    search_response = youtube.search().list(
-        q=f'{artist} {title} audio',
-        part='id,snippet',
-        maxResults=25,
-        relevanceLanguage='en',
-        safeSearch='none',
-        type='video'
-    ).execute()
+    print(json_result)
+
+    #Filter out results that:
+    # 1) contain the filter words in either the title or channel name
+    # 2) don't have the artist name in either the channel name or title
+    # 3) song title is not in video title
+    input_dict = json.loads(json_result)
     video_data = []
-    official_audio_videos = [] #May be multiple videos that claim to have "official" audio. Some are better than others
-    for search_result in search_response.get('items', []):
-        channelName = search_result['snippet']['channelTitle']
-        videoTitle = unescape(search_result['snippet']['title'])
-        videoID = search_result['id']['videoId']
-        if not artist.lower() in (channelName + videoTitle).lower():
+    for x in input_dict['videos']:
+        channel = x['channel']
+        videoTitle = x['title']
+        duration = time_to_seconds(x['duration'])
+        if not artist.lower() in (channel+videoTitle).lower():
             continue
-        #Ignore result if basic song title (ex: The Moment, if title is The Moment (feat. Some Guy)) is not in video title
         if not title_without_junk in videoTitle.lower():
             continue
-        #Ignore result if title or channel contains certain words
         if any(bad in (channelName.lower() + videoTitle.lower()) for bad in WRONG_VIDEO_WORDS):
             continue
-        video_data.append([videoID,
-                            videoTitle,
-                            -1])
+        video_data.append([x['id'], videoTitle, duration])
+
 
     #Finds the duration of each video. This + the known duration of the video determines the best youtube video to download
-    videos_response = youtube.videos().list(
-        part='contentDetails',
-        id=','.join(x[0] for x in video_data),
-        maxResults=25,
-    ).execute()
-    i = 0
-    for data in videos_response.get('items', []):
-        video_data[i][2] = time_to_seconds(data['contentDetails']['duration'])
+    for data in video_data:
         if 'official audio' in video_data[i][1].lower() and title_without_junk in video_data[i][1].lower():
             official_audio_videos.append(video_data[i])
         i += 1
