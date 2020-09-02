@@ -8,7 +8,6 @@
 import json
 import numpy as np
 import re, htmlentitydefs
-import isodate
 from globals import YOUTUBE_KEY
 from utils import removeTitleJunk, excludes_list2
 
@@ -46,8 +45,7 @@ def unescape(text):
 #Converts ISO-8601 string to seconds for easy comparisons
 #Ex: PT4M13S -> 4min, 13sec -> 253sec
 def time_to_seconds(time:str):
-    iso_duration = isodate.parse_duration(time)
-    return iso_duration.total_seconds()
+    return sum(x * int(t) for x, t in zip([1, 60, 3600], reversed(time.split(":"))))
 
 #Returns the best youtube link to use for the mp3 download.
 #Favors reasonably short videos that aren't clean
@@ -81,16 +79,16 @@ def youtube_search(artist:str, title:str):
             continue
         if not title_without_junk in videoTitle.lower():
             continue
-        if any(bad in (channelName.lower() + videoTitle.lower()) for bad in WRONG_VIDEO_WORDS):
+        if any(bad in (channel.lower() + videoTitle.lower()) for bad in WRONG_VIDEO_WORDS):
             continue
         video_data.append([x['id'], videoTitle, duration])
 
 
     #Finds the duration of each video. This + the known duration of the video determines the best youtube video to download
-    for data in video_data:
+    official_audio_videos = []
+    for i in range(len(video_data)):
         if 'official audio' in video_data[i][1].lower() and title_without_junk in video_data[i][1].lower():
             official_audio_videos.append(video_data[i])
-        i += 1
 
     #If there are "official audio" videos. Return the shortest one TODO: Better way of choosing one
     if len(official_audio_videos) > 0:
