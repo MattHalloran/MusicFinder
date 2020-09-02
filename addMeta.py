@@ -24,6 +24,7 @@ import findAlbumArt
 #other imports
 import sys
 import os
+import subprocess
 from os import listdir, path
 from os.path import isfile, join
 sys.path.append(os.path.join(os.path.dirname(__file__), 'PyLyricsLocal'))
@@ -252,18 +253,21 @@ with open(INPUT_PATH) as f:
     for search in searchParams:
         artist = str.strip(search[0])
         title = str.strip(formatTitle(search[1]))
-        youtube_url = syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))
+        youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
         if youtube_url is None:
             continue
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl_pp = YdlPostProcessor(ydl, metadata)
             ydl.add_post_processor(ydl_pp)
             try:
-                ydl.download([youtube_url])
+                #ydl.download([youtube_url])
+                subprocess.run(["youtube-dl", 
+                    "--no-check-certificate", 
+                    "-o", "~/Downloads/test.mp3", 
+                    "-x", "--audio-format", "mp3", youtube_url])
                 updateMetadata()
-            except:
-                print(f'''youtube-dl failed to download song {artist} - {title}. This is probably a problem 
-                    with youtube-dl itself. Try reinstalling or updating youtube-dl.''')
+            except Exception as e:
+                print(e)
 
 
 print('done')
