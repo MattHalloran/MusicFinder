@@ -1,26 +1,26 @@
-#Grabs user settings from text files
+# Grabs user settings from text files
 from os import path
 
-KEYS_PATH = 'api-keys.txt'
+KEYS_PATH = 'Api-keys.txt'
 DIRECTORIES_PATH = 'directories.txt'
 
-#Used for accessing various services
+# Used for accessing various services
 GENIUS_KEY = ''
 
-#Used for organizing data
+# Used for organizing data
 INPUT_PATH = ''
 SONG_DIRECTORY = ''
 ALBUM_COVER_DIRECTORY = ''
 LOG_DIRECTORY = ''
 
-#Find keys
+# Find keys
 with open(KEYS_PATH) as f:
     lines = f.readlines()
     for line in lines:
         if 'GENIUS_KEY' in line:
             GENIUS_KEY = str.strip(line[len('GENIUS_KEY')+1:])
 
-#Find inputs/outputs
+# Find inputs/outputs
 with open(DIRECTORIES_PATH) as f:
     lines = f.readlines()
     for line in lines:

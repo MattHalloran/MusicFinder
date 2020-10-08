@@ -4,4 +4,4 @@ import sacad
 
 
 if __name__ == "__main__":
-  sacad.cl_main()
+    sacad.cl_main()
