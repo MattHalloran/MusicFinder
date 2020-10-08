@@ -16,12 +16,8 @@ class AmazonBaseCoverSource(CoverSource):
     self.current_ua = self.ua.firefox
     self.base_domain = base_domain
 
-  def processQueryString(self, s):
-    """ See CoverSource.processQueryString. """
-    return __class__.unaccentuate(__class__.unpunctuate(s.lower()))
-
   def updateHttpHeaders(self, headers):
-    """ See CoverSource.updateHttpHeaders. """
+    """ See parent's def """
     # mimic Firefox headers
     headers["User-Agent"] = self.current_ua
     headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"

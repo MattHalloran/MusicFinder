@@ -6,13 +6,6 @@ import xml.etree.ElementTree
 from sacad.cover import CoverImageMetadata, CoverSourceQuality, CoverSourceResult, SUPPORTED_IMG_FORMATS
 from sacad.sources.base import CoverSource, MAX_THUMBNAIL_SIZE
 
-
-class LastFmCoverSourceResult(CoverSourceResult):
-
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, source_quality=CoverSourceQuality.NORMAL, **kwargs)
-
-
 class LastFmCoverSource(CoverSource):
 
   """
@@ -24,17 +17,11 @@ class LastFmCoverSource(CoverSource):
   BASE_URL = "https://ws.audioscrobbler.com/2.0/"
   API_KEY = "2410a53db5c7490d0f50c100a020f359"
 
-  SIZES = {"small": (34, 34),
-           "medium": (64, 64),
-           "large": (174, 174),
-           "extralarge": (300, 300),
-           "mega": (600, 600)}  # this is actually between 600 and 900, sometimes even more (ie 1200)
-
   def __init__(self, *args, **kwargs):
     super().__init__(*args, min_delay_between_accesses=0.1, **kwargs)
 
   def getSearchUrl(self, album, artist):
-    """ See CoverSource.getSearchUrl. """
+    """ See parent's def """
     # build request url
     params = collections.OrderedDict()
     params["method"] = "album.getinfo"
@@ -44,16 +31,19 @@ class LastFmCoverSource(CoverSource):
 
     return __class__.assembleUrl(__class__.BASE_URL, params)
 
-  def processQueryString(self, s):
-    """ See CoverSource.processQueryString. """
+  @staticmethod
+  def unpunctuate(self, s):
+    """ See parent's def """
+    #Use same blacklist as usual, minus ' and &
+    print('in the child unpunctuate')
     char_blacklist = set(string.punctuation)
     char_blacklist.remove("'")
     char_blacklist.remove("&")
     char_blacklist = frozenset(char_blacklist)
-    return __class__.unpunctuate(s.lower(), char_blacklist=char_blacklist)
+    return self().unpunctuate(s.lower(), char_blacklist=char_blacklist)
 
   async def parseResults(self, api_data):
-    """ See CoverSource.parseResults. """
+    """ See parent's def """
     results = []
 
     # get xml results list
@@ -64,33 +54,9 @@ class LastFmCoverSource(CoverSource):
       raise Exception("Unexpected Last.fm response status: %s" % (status))
     img_elements = xml_root.findall("album/image")
 
-    # build results from xml
-    thumbnail_url = None
-    thumbnail_size = None
     for img_element in img_elements:
       img_url = img_element.text
-      if not img_url:
-        # last.fm returns empty image tag for size it does not have
-        continue
-      lfm_size = img_element.get("size")
-      if lfm_size == "mega":
-        check_metadata = CoverImageMetadata.SIZE
-      else:
-        check_metadata = CoverImageMetadata.NONE
-      try:
-        size = __class__.SIZES[lfm_size]
-      except KeyError:
-        continue
-      if (size[0] <= MAX_THUMBNAIL_SIZE) and ((thumbnail_size is None) or (size[0] < thumbnail_size)):
-        thumbnail_url = img_url
-        thumbnail_size = size[0]
-      format = os.path.splitext(img_url)[1][1:].lower()
-      format = SUPPORTED_IMG_FORMATS[format]
-      results.append(LastFmCoverSourceResult(img_url,
-                                             size,
-                                             format,
-                                             thumbnail_url=thumbnail_url,
-                                             source=self,
-                                             check_metadata=check_metadata))
+      if img_url:
+        results.append(CoverSourceResult(img_url, CoverSourceQuality.NORMAL))
 
     return results

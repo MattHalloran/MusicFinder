@@ -1,19 +1,35 @@
-import collections
-import json
-import urllib.parse
+#!/usr/bin/env python3
 
-import lxml.cssselect
-import lxml.etree
+# requires: selenium, chromium-driver, retry
+# Heavily inspired by http://sam.aiki.info/b/google-images.py
+
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+import selenium.common.exceptions as sel_ex
+import sys
+import time
+import urllib.parse
+from retry import retry
+import argparse
+import logging
+import requests
 
 from sacad.cover import CoverImageMetadata, CoverSourceQuality, CoverSourceResult, SUPPORTED_IMG_FORMATS
 from sacad.sources.base import CoverSource
 
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)
+logger = logging.getLogger()
+retry_logger = None
 
-class GoogleImagesCoverSourceResult(CoverSourceResult):
+css_thumbnail = "img.Q4LuWd"
+css_large = "img.n3VNCb"
+css_load_more = ".mye4qd"
+selenium_exceptions = (sel_ex.ElementClickInterceptedException, sel_ex.ElementNotInteractableException, sel_ex.StaleElementReferenceException)
 
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, source_quality=CoverSourceQuality.LOW, **kwargs)
-
+SAFE_SEARCH = "off"
+NUM_IMAGES = 10
+OPTS = "" #e.g. isz:lt,islt:svga,itp:photo,ic:color,ift:jpg
 
 class GoogleImagesWebScrapeCoverSource(CoverSource):
 
@@ -25,7 +41,6 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
   """
 
   BASE_URL = "https://www.google.com/images"
-  RESULTS_SELECTOR = lxml.cssselect.CSSSelector("#search #rg_s .rg_di")
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args,
@@ -34,68 +49,97 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
                      **kwargs)
 
   def getSearchUrl(self, album, artist):
-    """ See CoverSource.getSearchUrl. """
-    # build request url
-    params = collections.OrderedDict()
-    params["gbv"] = "2"
-    params["q"] = "\"%s\" \"%s\" front cover" % (artist, album)
-    if abs(self.target_size - 500) < 300:
-      params["tbs"] = "isz:m"
-    elif self.target_size > 800:
-      params["tbs"] = "isz:l"
-
-    return __class__.assembleUrl(__class__.BASE_URL, params)
+    ''' See parent's def '''
+    query = f'"{artist}" "{album}" album cover'
+    opts = urllib.parse.quote(OPTS)
+    search_url = f'https://www.google.com/search?safe={SAFE_SEARCH}&site=&tbm=isch&source=hp&q={query}&oq={query}&gs_l=img&tbs={opts}'
+    return search_url
 
   def updateHttpHeaders(self, headers):
-    """ See CoverSource.updateHttpHeaders. """
+    """ parent's def """
     headers["User-Agent"] = self.ua.firefox
 
+  def scroll_to_end(wd):
+    wd.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
+  @retry(exceptions=KeyError, tries=6, delay=0.1, backoff=2, logger=retry_logger)
+  def get_thumbnails(wd, want_more_than=0):
+      wd.execute_script("document.querySelector('{}').click();".format(css_load_more))
+      thumbnails = wd.find_elements_by_css_selector(css_thumbnail)
+      n_results = len(thumbnails)
+      if n_results <= want_more_than:
+          raise KeyError("no new thumbnails")
+      return thumbnails
+
+  @retry(exceptions=KeyError, tries=6, delay=0.1, backoff=2, logger=retry_logger)
+  def get_image_src(wd):
+      actual_images = wd.find_elements_by_css_selector(css_large)
+      sources = []
+      for img in actual_images:
+          src = img.get_attribute("src")
+          if src.startswith("http") and not src.startswith("https://encrypted-tbn0.gstatic.com/"):
+              sources.append(src)
+      if not len(sources):
+          raise KeyError("no large image")
+      return sources
+
+  @retry(exceptions=selenium_exceptions, tries=6, delay=0.1, backoff=2, logger=retry_logger)
+  def retry_click(el):
+      el.click()
+
+  def get_images(wd, start=0, n=20, out=None):
+      thumbnails = []
+      count = len(thumbnails)
+      while count < n:
+          __class__.scroll_to_end(wd)
+          try:
+              thumbnails = __class__.get_thumbnails(wd, want_more_than=count)
+          except KeyError as e:
+              logger.warning("cannot load enough thumbnails")
+              break
+          count = len(thumbnails)
+      sources = []
+      for tn in thumbnails:
+          try:
+              __class__.retry_click(tn)
+          except selenium_exceptions as e:
+              logger.warning("main image click failed")
+              continue
+          sources1 = []
+          try:
+              sources1 = __class__.get_image_src(wd)
+          except KeyError as e:
+              pass
+              # logger.warning("main image not found")
+          if not sources1:
+              tn_src = tn.get_attribute("src")
+              if not tn_src.startswith("data"):
+                  logger.warning("no src found for main image, using thumbnail")          
+                  sources1 = [tn_src]
+              else:
+                  logger.warning("no src found for main image, thumbnail is a data URL")
+          for src in sources1:
+              if not src in sources:
+                  sources.append(src)
+                  if out:
+                      print(src, file=out)
+                      out.flush()
+          if len(sources) >= n:
+              break
+      return sources
+
+  #Overrides base fetchResults, since google image parsing uses a headless browser
+  async def fetchResults(self, url, post_data=None):
+    opts = Options()
+    opts.add_argument("--headless")
+    with webdriver.Chrome(ChromeDriverManager().install(), options=opts) as wd:
+      wd.get(url)
+      sources = __class__.get_images(wd, n=NUM_IMAGES, out=sys.stdout)
+    return (None, sources)
+
   async def parseResults(self, api_data):
-    """ See CoverSource.parseResults. """
+    """ See parent's def """
     results = []
-
-    # parse HTML and get results
-    parser = lxml.etree.HTMLParser()
-    html = lxml.etree.XML(api_data.decode("latin-1"), parser)
-
-    for rank, result in enumerate(__class__.RESULTS_SELECTOR(html), 1):
-      # extract url
-      metadata_div = result.find("div")
-      metadata_json = lxml.etree.tostring(metadata_div, encoding="unicode", method="text")
-      metadata_json = json.loads(metadata_json)
-      google_url = result.find("a").get("href")
-      if google_url is not None:
-        query = urllib.parse.urlsplit(google_url).query
-      else:
-        query = None
-      if not query:
-        img_url = metadata_json["ou"]
-      else:
-        query = urllib.parse.parse_qs(query)
-        img_url = query["imgurl"][0]
-      # extract format
-      check_metadata = CoverImageMetadata.NONE
-      format = metadata_json["ity"].lower()
-      try:
-        format = SUPPORTED_IMG_FORMATS[format]
-      except KeyError:
-        # format could not be identified or is unknown
-        format = None
-        check_metadata = CoverImageMetadata.NONE
-      # extract size
-      if not query:
-        size = metadata_json["ow"], metadata_json["oh"]
-      else:
-        size = tuple(map(int, (query["w"][0], query["h"][0])))
-      # extract thumbnail url
-      thumbnail_url = metadata_json["tu"]
-      # result
-      results.append(GoogleImagesCoverSourceResult(img_url,
-                                                   size,
-                                                   format,
-                                                   thumbnail_url=thumbnail_url,
-                                                   source=self,
-                                                   rank=rank,
-                                                   check_metadata=check_metadata))
-
+    for rank, url in enumerate(api_data, 1):
+      results.append(CoverSourceResult(url, CoverSourceQuality.NORMAL, rank))
     return results

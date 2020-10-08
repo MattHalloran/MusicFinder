@@ -23,12 +23,6 @@ AMAZON_DIGITAL_IMAGE_FORMATS = [AmazonDigitalImageFormat(0, 1, 600),  # http://z
 AMAZON_DIGITAL_IMAGE_FORMATS.sort(key=operator.attrgetter("total_res"), reverse=True)
 
 
-class AmazonDigitalCoverSourceResult(CoverSourceResult):
-
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, source_quality=CoverSourceQuality.NORMAL, **kwargs)
-
-
 class AmazonDigitalCoverSource(AmazonBaseCoverSource):
 
   """ Cover source returning Amazon.com digital music images. """
@@ -47,7 +41,7 @@ class AmazonDigitalCoverSource(AmazonBaseCoverSource):
                      **kwargs)
 
   def getSearchUrl(self, album, artist):
-    """ See CoverSource.getSearchUrl. """
+    """ See parent's def """
     url = "%s/s" % (__class__.BASE_URL)
     params = collections.OrderedDict()
     params["k"] = " ".join((artist, album))
@@ -56,7 +50,7 @@ class AmazonDigitalCoverSource(AmazonBaseCoverSource):
     return __class__.assembleUrl(url, params)
 
   async def parseResults(self, api_data):
-    """ See CoverSource.parseResults. """
+    """ See parent's def """
     results = []
 
     # parse page
@@ -107,17 +101,8 @@ class AmazonDigitalCoverSource(AmazonBaseCoverSource):
           size = (amazon_img_format.total_res,) * 2
           break
 
-      # assume format is always jpg
-      format = CoverImageFormat.JPEG
-
       # add result
-      results.append(AmazonDigitalCoverSourceResult(img_url,
-                                                    size,
-                                                    format,
-                                                    thumbnail_url=thumbnail_url,
-                                                    source=self,
-                                                    rank=rank,
-                                                    check_metadata=CoverImageMetadata.SIZE))
+      results.append(CoverSourceResult(img_url, CoverSourceQuality.NORMAL, rank))
 
     return results
 

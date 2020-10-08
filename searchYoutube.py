@@ -83,11 +83,4 @@ def youtube_search(artist:str, title:str):
     best_duration = min([x[2] for x in video_data])
     video_data = [data for data in video_data if data[2] == best_duration]
     return video_data[0][0]
-
-
-
-# try:
-#     videos = youtube_search('travis scott', 'sicko mode') #youtube_search(artist, title)
-#     #print('done')
-# except HttpError as e:
-#     print(f'An HTTP error occurred:\n{e}')
+    
