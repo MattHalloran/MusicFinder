@@ -1,3 +1,2 @@
-from sacad.sources.amazondigital import AmazonDigitalCoverSource
 from sacad.sources.lastfm import LastFmCoverSource
 from sacad.sources.google_images import GoogleImagesWebScrapeCoverSource
