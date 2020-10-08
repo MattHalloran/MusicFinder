@@ -50,7 +50,7 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
         query = f'"{artist}" "{album}" album cover'
         opts = urllib.parse.quote(OPTS)
         search_url = f'https://www.google.com/search?safe={SAFE_SEARCH}&site=&tbm=isch&source=hp&q={query}&oq={query}&gs_l=img&tbs={opts}'
-        return search_url
+        return (search_url, None)
 
     def updateHttpHeaders(self, headers):
         """ parent's def """
@@ -132,7 +132,7 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
         with webdriver.Chrome(ChromeDriverManager().install(), options=opts) as wd:
             wd.get(url)
             sources = __class__.get_images(wd, n=NUM_IMAGES, out=sys.stdout)
-        return (None, sources)
+        return sources
 
     async def parseResults(self, api_data):
         """ See parent's def """

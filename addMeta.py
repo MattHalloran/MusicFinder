@@ -83,17 +83,21 @@ def formatTitle(title: str):
 # 4) album name - parses from Genius
 # 5) album art - uses findAlbumArt.py
 def updateMetadata():
+    # Create meta object
     meta = None
     try:
         meta = EasyID3(f'{fileName}.mp3')
     except mutagen.id3.ID3NoHeaderError:
         meta = mutagen.File(fileName, easy=True)
         meta.add_tags()
+
+    # Add known metadata
     meta['artist'] = artist
     meta['albumartist'] = artist
     meta['title'] = title
 
-    # Searches Genius for the correct song url Uses authentication token, which can be made at https://genius.com/api-clients
+    # Search Genius for the correct song url
+    # Uses authentication token, which can be made at https://genius.com/api-clients
     def request_song_url(song_title, artist_name):
         base_url = 'https://api.genius.com'
         headers = {'Authorization': 'Bearer ' + GENIUS_KEY}

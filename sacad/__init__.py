@@ -14,14 +14,14 @@ from sacad.cover import CoverSourceResult
 async def search_and_download(album, artist, format, size, out_filepath, *, size_tolerance_prct, is_single):
     """ Search and download a cover, return True if success, False instead. """
 
-    # Register sources. Each source is a different website (Amazon, Google Images, etc.)
+    # Register sources. Each source is a different website (Google Images, LastFM, etc.)
     source_args = (size, size_tolerance_prct)
     # If a single, it's best to only use google images
     if is_single:
         cover_sources = [sources.GoogleImagesWebScrapeCoverSource(*source_args)]
     else:
         cover_sources = [sources.LastFmCoverSource(*source_args),
-                         sources.AmazonDigitalCoverSource(*source_args)]
+                         sources.GoogleImagesWebScrapeCoverSource(*source_args)]
 
     # schedule search work
     search_futures = []
@@ -45,7 +45,7 @@ async def search_and_download(album, artist, format, size, out_filepath, *, size
     results.sort(reverse=True,
                  key=functools.cmp_to_key(functools.partial(CoverSourceResult.compare,
                                                             target_size=size,
-                                                            size_tolerance_prct=size_tolerance_prct)))   
+                                                            size_tolerance_prct=size_tolerance_prct)))
     success = False
     # If there is a duplicate cover, pick the highest quality version of that as the final cover.
     # Otherwise, pick the first

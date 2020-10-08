@@ -3,8 +3,7 @@ import logging
 import os
 import random
 import string
-import unicodedata
-import urllib.parse
+import requests
 
 import appdirs
 import fake_useragent
@@ -66,61 +65,25 @@ class CoverSource(metaclass=abc.ABCMeta):
         print(f"Searching with source '{self.__class__.__name__}'...")
         album = self.processAlbumString(album)
         artist = self.processArtistString(artist)
-        url_data = self.getSearchUrl(album, artist)
-        if isinstance(url_data, tuple):
-            url, post_data = url_data
-        else:
-            url = url_data
-            post_data = None
+        (url, post_data) = self.getSearchUrl(album, artist)
         try:
-            store_in_cache_callback, api_data = await self.fetchResults(url, post_data)
+            api_data = await self.fetchResults(url, post_data)
             print('going to parse results')
             results = await self.parseResults(api_data)
         except Exception as e:
             print(f'Search with source "{self.__class__.__name__}" failed: {e.__class__.__qualname__} {e}')
             return ()
-        else:
-            if results and store_in_cache_callback:
-                # only store in cache if parsing succeeds and we have results
-                await store_in_cache_callback()
 
         return results
 
     async def fetchResults(self, url, post_data=None):
-        """ Get a (store in cache callback, search results) tuple from an URL. """
-        if post_data is not None:
-            print(f'Querying URL {url} {dict(post_data)}...')
+        """ Get search results from the url and post_data """
+        req = None
+        if post_data:
+            req = requests.post(url, data=post_data)
         else:
-            print(f'Querying URL {url}...')
-        headers = {}
-        self.updateHttpHeaders(headers)
-        return await self.http.query(url,
-                                     post_data=post_data,
-                                     headers=headers,
-                                     cache=__class__.api_cache)
-
-    async def probeUrl(self, url, response_headers=None):
-        """ Probe URL reachability from cache or HEAD request. """
-        self.logger.debug(f'Probing URL {url}...')
-        headers = {}
-        self.updateHttpHeaders(headers)
-        resp_headers = {}
-        resp_ok = await self.http.isReachable(url,
-                                              headers=headers,
-                                              response_headers=resp_headers,
-                                              cache=__class__.probe_cache)
-
-        if response_headers is not None:
-            response_headers.update(resp_headers)
-
-        return resp_ok
-
-    @staticmethod
-    def assembleUrl(base_url, params):
-        """ Build an URL from URL base and parameters. """
-        print('in assembleUrl')
-        print(f'{base_url}?{urllib.parse.urlencode(params)}')
-        return f'{base_url}?{urllib.parse.urlencode(params)}'
+            req = requests.post(url)
+        return req.text
 
     @staticmethod
     def unpunctuate(s, *, char_blacklist=string.punctuation):

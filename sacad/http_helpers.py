@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import pickle
 import urllib.parse
 
 import aiohttp
@@ -138,77 +137,6 @@ class Http:
 
         return store_in_cache_callback, content
 
-    async def isReachable(self, url, *, headers=None, verify=True, response_headers=None, cache=None):
-        """ Send a HEAD request with short timeout or get data from cache,
-        return True if ressource has 2xx status code, False instead. """
-        if (cache is not None) and (url in cache):
-            # try from cache first
-            self.logger.debug("Got headers for URL '%s' from cache" % (url))
-            resp_ok, response_headers = pickle.loads(cache[url])
-            return resp_ok
-
-        if self.session is None:
-            self._initSession()
-
-        # do we need to rate limit?
-        if self.rate_limited_domains is not None:
-            domain = urllib.parse.urlsplit(url).path
-            rate_limit = domain in self.rate_limited_domains
-        else:
-            rate_limit = True
-        if rate_limit:
-            domain_rate_watcher = rate_watcher.AccessRateWatcher(self.watcher_db_filepath,
-                                                                 url,
-                                                                 self.min_delay_between_accesses,
-                                                                 jitter_range_ms=self.jitter_range_ms,
-                                                                 logger=self.logger)
-
-        resp_ok = True
-        try:
-            for attempt, time_to_sleep in enumerate(redo.retrier(max_attempts=HTTP_MAX_ATTEMPTS,
-                                                                 sleeptime=0.5,
-                                                                 max_sleeptime=HTTP_MAX_RETRY_SLEEP_SHORT_S,
-                                                                 sleepscale=1.5),
-                                                    1):
-                if rate_limit:
-                    await domain_rate_watcher.waitAccessAsync()
-
-                try:
-                    async with self.session.head(url,
-                                                 headers=self._buildHeaders(headers),
-                                                 timeout=HTTP_SHORT_TIMEOUT,
-                                                 ssl=verify) as response:
-                        pass
-
-                except (asyncio.TimeoutError, aiohttp.ClientError) as e:
-                    self.logger.warning("Probing '%s' failed (attempt %u/%u): %s %s" % (url,
-                                                                                        attempt,
-                                                                                        HTTP_MAX_ATTEMPTS,
-                                                                                        e.__class__.__qualname__,
-                                                                                        e))
-                    if attempt == HTTP_MAX_ATTEMPTS:
-                        resp_ok = False
-                    else:
-                        self.logger.debug("Retrying in %.3fs" % (time_to_sleep))
-                        await asyncio.sleep(time_to_sleep)
-
-                else:
-                    response.raise_for_status()
-
-                    if response_headers is not None:
-                        response_headers.update(response.headers)
-
-                    break  # http retry loop
-
-        except aiohttp.ClientResponseError as e:
-            self.logger.debug("Probing '%s' failed: %s %s" % (url, e.__class__.__qualname__, e))
-            resp_ok = False
-
-        if cache is not None:
-            # store in cache
-            cache[url] = pickle.dumps((resp_ok, response_headers))
-
-        return resp_ok
 
     def _buildHeaders(self, headers):
         """ Build HTTP headers dictionary. """

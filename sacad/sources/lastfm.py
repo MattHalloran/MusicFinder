@@ -21,14 +21,11 @@ class LastFmCoverSource(CoverSource):
 
     def getSearchUrl(self, album, artist):
         """ See parent's def """
-        # build request url
-        params = collections.OrderedDict()
-        params["method"] = "album.getinfo"
-        params["api_key"] = __class__.API_KEY
-        params["album"] = album
-        params["artist"] = artist
-
-        return __class__.assembleUrl(__class__.BASE_URL, params)
+        payload = {"method": "album.getinfo",
+                   "api_key": __class__.API_KEY,
+                   "album": album,
+                   "artist": artist}
+        return (__class__.BASE_URL, payload)
 
     @staticmethod
     def unpunctuate(self, s):
@@ -46,8 +43,7 @@ class LastFmCoverSource(CoverSource):
         results = []
 
         # get xml results list
-        xml_text = api_data.decode("utf-8")
-        xml_root = xml.etree.ElementTree.fromstring(xml_text)
+        xml_root = xml.etree.ElementTree.fromstring(api_data)
         status = xml_root.get("status")
         if status != "ok":
             raise Exception("Unexpected Last.fm response status: %s" % (status))
