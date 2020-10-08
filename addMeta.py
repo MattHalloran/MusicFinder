@@ -124,6 +124,7 @@ def updateMetadata():
 
 
     album_name = f'{title} - Single'
+    is_single = True
     #Find song url
     song_url = request_song_url(removeTitleJunk(title, excludes_list1), artist)
     #Get page data TODO: if lyrics not found, album is not set I think? This can probably be grabbed in the album cover code
@@ -140,6 +141,7 @@ def updateMetadata():
         album_index = album_info_div.find('Album')
         if album_index != -1:
             album_name = str.strip(album_info_div[album_index+5:])
+            is_single = False
     meta['album'] = album_name
 
     album_art_downloaded = False
@@ -149,7 +151,7 @@ def updateMetadata():
         album_art_downloaded = True
     #Tries to download art using findAlbumArt.py first
     else:
-        album_art_downloaded = findAlbumArt.downloadAlbumArt(album_name, artist)
+        album_art_downloaded = findAlbumArt.downloadAlbumArt(album_name, artist, is_single)
 
     if not album_art_downloaded:
         album_art_div = soup.find('div', class_='header_with_cover_art')
@@ -187,7 +189,6 @@ with open(INPUT_PATH) as f:
         youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
         ydl_opts = {
             'format': 'bestaudio/best',
-            'verbose': 'True',
             'nocheckcertificate': 'True',
             'outtmpl': f'{fileName}.%(ext)s',
             'postprocessors': [{

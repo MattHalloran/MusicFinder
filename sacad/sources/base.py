@@ -71,7 +71,7 @@ class CoverSource(metaclass=abc.ABCMeta):
 
   async def search(self, album, artist):
     """ Search for a given album/artist and return an iterable of CoverSourceResult. """
-    self.logger.debug(f"Searching with source '{self.__class__.__name__}'...")
+    print(f"Searching with source '{self.__class__.__name__}'...")
     album = self.processAlbumString(album)
     artist = self.processArtistString(artist)
     url_data = self.getSearchUrl(album, artist)
@@ -82,37 +82,25 @@ class CoverSource(metaclass=abc.ABCMeta):
       post_data = None
     try:
       store_in_cache_callback, api_data = await self.fetchResults(url, post_data)
+      print('going to parse results')
       results = await self.parseResults(api_data)
     except Exception as e:
       # raise
-      self.logger.warning("Search with source '%s' failed: %s %s" % (self.__class__.__name__,
-                                                                     e.__class__.__qualname__,
-                                                                     e))
+      print(f'Search with source "{self.__class__.__name__}" failed: {e.__class__.__qualname__} {e}')
       return ()
     else:
-      if results:
+      if results and store_in_cache_callback:
         # only store in cache if parsing succeeds and we have results
         await store_in_cache_callback()
-
-    # get metadata
-    futures = []
-    for result in filter(operator.methodcaller("needMetadataUpdate"), results):
-      coroutine = result.updateImageMetadata()
-      future = asyncio.ensure_future(coroutine)
-      futures.append(future)
-    if futures:
-      await asyncio.wait(futures)
-    for future in futures:
-      future.result()  # raise pending exception if any
 
     return results
 
   async def fetchResults(self, url, post_data=None):
     """ Get a (store in cache callback, search results) tuple from an URL. """
     if post_data is not None:
-      self.logger.debug(f'Querying URL {url} {dict(post_data)}...')
+      print(f'Querying URL {url} {dict(post_data)}...')
     else:
-      self.logger.debug(f'Querying URL {url}...')
+      print(f'Querying URL {url}...')
     headers = {}
     self.updateHttpHeaders(headers)
     return await self.http.query(url,
@@ -139,6 +127,8 @@ class CoverSource(metaclass=abc.ABCMeta):
   @staticmethod
   def assembleUrl(base_url, params):
     """ Build an URL from URL base and parameters. """
+    print('in assembleUrl')
+    print(f'{base_url}?{urllib.parse.urlencode(params)}')
     return f'{base_url}?{urllib.parse.urlencode(params)}'
 
   @staticmethod
@@ -154,21 +144,13 @@ class CoverSource(metaclass=abc.ABCMeta):
     # remove consecutive spaces
     return " ".join(filter(None, s.split(" ")))
 
-  #
-  # The following methods can or should be overriden in subclasses
-  #
-
-  def processQueryString(self, s):
-    """ Process artist or album string before building query URL. """
-    return __class__.unpunctuate(s.lower())
-
   def processArtistString(self, artist):
     """ Process artist string before building query URL. """
-    return self.processQueryString(artist)
+    return __class__.unpunctuate(artist.lower())
 
   def processAlbumString(self, album):
     """ Process album string before building query URL. """
-    return self.processQueryString(album)
+    return __class__.unpunctuate(album.lower())
 
   @abc.abstractmethod
   def getSearchUrl(self, album, artist):
