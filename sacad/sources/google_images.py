@@ -112,7 +112,7 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
                 else:
                     logger.warning("no src found for main image, thumbnail is a data URL")
             for src in sources1:
-                if not src in sources:
+                if src not in sources:
                     sources.append(src)
                     if out:
                         print(src, file=out)

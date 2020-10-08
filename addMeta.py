@@ -28,7 +28,7 @@ import shutil
 from bs4 import BeautifulSoup
 
 from globals import GENIUS_KEY, INPUT_PATH, SONG_DIRECTORY, ALBUM_COVER_DIRECTORY
-from utils import slugify, removeTitleJunk, excludes_list1
+from utils import slugify, removeTitleJunk, words_kept_in_parens1
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'PyLyricsLocal'))
 
@@ -70,7 +70,7 @@ def formatTitle(title: str):
     if feat_index > 0 and '(' not in title:
         title = title[:feat_index] + '(' + title[feat_index:] + ')'
 
-    if '(feat' in title.lower() and not '(feat.' in title.lower():
+    if '(feat' in title.lower() and '(feat.' not in title.lower():
         title.replace('(feat', '(feat.').replace('(FEAT', '(feat.')
 
     return title
@@ -122,7 +122,7 @@ def updateMetadata():
     album_name = f'{title} - Single'
     is_single = True
     # Find song url
-    song_url = request_song_url(removeTitleJunk(title, excludes_list1), artist)
+    song_url = request_song_url(removeTitleJunk(title, words_kept_in_parens1), artist)
     # Get page data TODO: if lyrics not found, album is not set I think? This can probably be grabbed in the album cover code
     if song_url is not None:
         page = requests.get(song_url)
@@ -181,7 +181,7 @@ with open(INPUT_PATH) as f:
         artist = str.strip(search[0])
         title = str.strip(formatTitle(search[1]))
         fileName = f'{SONG_DIRECTORY}/{slugify(artist)} - {slugify(title)}'
-        youtube_url = f'https://www.youtube.com/watch?v={syt.youtube_search(artist, removeTitleJunk(title, excludes_list1))}'
+        youtube_url = syt.youtube_search(artist, removeTitleJunk(title, words_kept_in_parens1))
         ydl_opts = {
             'format': 'bestaudio/best',
             'nocheckcertificate': 'True',
