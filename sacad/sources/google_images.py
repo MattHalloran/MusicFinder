@@ -52,10 +52,6 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
         search_url = f'https://www.google.com/search?safe={SAFE_SEARCH}&site=&tbm=isch&source=hp&q={query}&oq={query}&gs_l=img&tbs={opts}'
         return (search_url, None)
 
-    def updateHttpHeaders(self, headers):
-        """ parent's def """
-        headers["User-Agent"] = self.ua.firefox
-
     def scroll_to_end(wd):
         wd.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 

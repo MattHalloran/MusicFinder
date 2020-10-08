@@ -23,7 +23,3 @@ def downloadAlbumArt(album: str, artist: str, is_single: bool = False):
     except Exception as e:
         print(f'ERROR! findAlbumArt.py - downloadAlbumArt. Passed in album: {album}, artist: {artist}. Error: {e}')
         return False
-
-# Testing only
-downloadAlbumArt('Franchise', 'Travis Scott', True)
-#downloadAlbumArt('Nectar', 'Joji', False)

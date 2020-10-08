@@ -1,4 +1,3 @@
-import collections
 import string
 import xml.etree.ElementTree
 

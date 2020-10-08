@@ -59,10 +59,4 @@ async def search_and_download(album, artist, format, size, out_filepath, *, size
     else:
         logging.getLogger("Main").info("No results")
 
-    # cleanup sessions
-    close_cr = []
-    for cover_source in cover_sources:
-        close_cr.append(cover_source.closeSession())
-    await asyncio.gather(*close_cr)
-
     return success

@@ -9,8 +9,6 @@ import appdirs
 import fake_useragent
 import web_cache
 
-from sacad import http_helpers
-
 
 class CoverSource(metaclass=abc.ABCMeta):
     """ Base class for all cover sources. """
@@ -20,12 +18,6 @@ class CoverSource(metaclass=abc.ABCMeta):
         self.target_size = target_size
         self.size_tolerance_prct = size_tolerance_prct
         self.logger = logging.getLogger(self.__class__.__name__)
-
-        self.http = http_helpers.Http(allow_session_cookies=allow_cookies,
-                                      min_delay_between_accesses=min_delay_between_accesses,
-                                      jitter_range_ms=jitter_range_ms,
-                                      rate_limited_domains=rate_limited_domains,
-                                      logger=self.logger)
 
         ua_cache_dir = os.path.join(appdirs.user_cache_dir(appname="sacad",
                                                            appauthor=False),
@@ -55,10 +47,6 @@ class CoverSource(metaclass=abc.ABCMeta):
                 logging.getLogger('Cache').debug(f'{purged_count} obsolete entries have been removed from cache {cache_name}')
                 row_count = len(cache)
                 logging.getLogger('Cache').debug(f'Cache {cache_name} contains {row_count} entries')
-
-    async def closeSession(self):
-        """ Closes HTTP session to make aiohttp happy. """
-        await self.http.close()
 
     async def search(self, album, artist):
         """ Search for a given album/artist and return an iterable of CoverSourceResult. """
@@ -112,10 +100,6 @@ class CoverSource(metaclass=abc.ABCMeta):
         - the post parameters as a collections.OrderedDict
 
         """
-        pass
-
-    def updateHttpHeaders(self, headers):
-        """ Add API specific HTTP headers. """
         pass
 
     @abc.abstractmethod
