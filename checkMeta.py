@@ -3,13 +3,14 @@
 
 import os
 from pathlib import Path
+from mutagen.id3 import ID3, APIC, USLT, TPE1, TPE2, TIT2, TALB
 import mutagen
 import json
 
 
-def checkMetaFile(file: str):
+def checkMetaFile(fileName: str):
     ''' Returns included and missing metadata of a song file '''
-    data = mutagen.File(file)
+    data = mutagen.File(Path(fileName))
     if data is None:
         data = dict()
 
@@ -23,24 +24,25 @@ def checkMetaFile(file: str):
     return (included_items, missing_items)
 
 
-def checkMetaDir(input_directory: Path, output_file: str):
+def checkMetaDir(input_directory: Path):
     perfect_files = []
     imperfect_files = []
     for path, subdirs, files in os.walk(input_directory):
         for name in files:
             if name.endswith('.mp3'):
                 fileName = os.path.join(path, name)
-                (_, missing) = checkMetaFile(fileName)
+                (included, missing) = checkMetaFile(fileName)
                 if len(missing) > 0:
                     imperfect_files.append({"file": fileName,
                                            "missing": missing})
                 else:
-                    perfect_files.append({"file": fileName})
-    json_data = json.dumps({"goodFiles": imperfect_files,
+                    perfect_files.append({"file": fileName,
+                                          "artist": included["TPE1"].text[0],
+                                          "album_name": included["TALB"].text[0],
+                                          "title": included["TIT2"].text[0]})
+    json_data = json.dumps({"goodFiles": perfect_files,
                             "badFiles": imperfect_files})
-    f = open(output_file, 'w')
-    f.write(json_data)
-    f.close()
+    return json_data
 
 
 
@@ -49,7 +51,8 @@ if __name__ == "__main__":
     while input_directory == '':
         try:
             expanded_path = os.path.expanduser(input('enter input directory: '))
-            input_directory = Path(expanded_path)
+            path_check = Path(expanded_path)
+            input_directory = expanded_path
         except Exception:
             print('Directory not found. If you would like to quit, enter ^c')
 
@@ -63,4 +66,7 @@ if __name__ == "__main__":
         except Exception:
             print('Could not create output file. If you would like to quit, enter ^c')
 
-    checkMetaDir(input_directory, output_file)
+    json_data = checkMetaDir(input_directory)
+    f = open(output_file, 'w')
+    f.write(json_data)
+    f.close()

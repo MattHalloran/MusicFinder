@@ -6,6 +6,7 @@
 from bs4 import BeautifulSoup
 import requests
 from globals import GENIUS_KEY
+from utils import removeTitleJunk, words_kept_in_parens2, uncensor
 
 
 def request_song_url(title: str, artist: str):
@@ -35,8 +36,13 @@ def find_genius_data(title: str, artist: str):
     """ Returns all useful information that can be found on Genius.
     This is currently lyrics and album name """
     song_url = request_song_url(title, artist)
+    # If normal title returns no results, try a simplified one
     if song_url is None:
-        return {}
+        simpler_title = removeTitleJunk(title, words_kept_in_parens2)
+        simpler_title = uncensor(simpler_title)
+        song_url = request_song_url(simpler_title, artist)
+        if song_url is None:
+            return {}
     page = requests.get(song_url)
     soup = BeautifulSoup(page.text, 'html.parser')
 

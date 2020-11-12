@@ -51,6 +51,9 @@ class LastFmCoverSource(CoverSource):
         for img_element in img_elements:
             img_url = img_element.text
             if img_url:
-                results.append(CoverSourceResult(img_url, CoverSourceQuality.NORMAL))
+                try:
+                    results.append(CoverSourceResult(img_url, CoverSourceQuality.NORMAL))
+                except:
+                    print('Could not download image')
 
         return results

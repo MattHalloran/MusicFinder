@@ -134,5 +134,8 @@ class GoogleImagesWebScrapeCoverSource(CoverSource):
         """ See parent's def """
         results = []
         for rank, url in enumerate(api_data, 1):
-            results.append(CoverSourceResult(url, CoverSourceQuality.NORMAL, rank))
+            try:
+                results.append(CoverSourceResult(url, CoverSourceQuality.NORMAL, rank))
+            except:
+                print('Could not download image')
         return results

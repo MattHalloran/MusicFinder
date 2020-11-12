@@ -42,7 +42,7 @@ class CoverSourceResult:
         self.url = url
         self.quality = quality
         self.rank = rank
-        response = requests.get(url)
+        response = requests.get(url, timeout=20)
         content_type = response.headers['content-type']
         extension = mimetypes.guess_extension(content_type)
         self.format = SUPPORTED_IMG_FORMATS.get(extension[1:], None)
