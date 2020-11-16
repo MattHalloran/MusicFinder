@@ -37,7 +37,7 @@ CENSORED_WORDS = ['ass', 'fuck', 'shit', 'bitch']
 
 
 # Cleans input for filename. NOTE: Do not pass in an entire path! This will remove slashes
-# First tries to uncensor bad words, then removes any characters 
+# First tries to uncensor bad words, then removes any characters
 # not valid for file names
 def slugify(text: str):
     cleaned_text = ''
